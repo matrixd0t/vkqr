@@ -1,5 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "vkqr"
 version = "0.1.0"
-requires-python = ">=3.13"
+description = "Получение cookies ВКонтакте по QR-коду (VK ID)"
+requires-python = ">=3.9"
 dependencies = []
+
+[project.optional-dependencies]
+async = ["httpx>=0.27"]
+
+[project.scripts]
+vkqr = "vkqr:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["vkqr", "qr_auth"]
