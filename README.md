@@ -22,8 +22,7 @@ QR-код выводится прямо в терминал. Готовый ск
 ### Linux / macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/matrixd0t/vkqr/master/scripts/vkqr.sh -o vkqr.sh
-sh vkqr.sh -o cookies.json
+curl -fsSL https://raw.githubusercontent.com/matrixd0t/vkqr/master/scripts/vkqr.sh -o vkqr.sh && sh vkqr.sh -o cookies.json
 ```
 
 ### Windows (PowerShell)
