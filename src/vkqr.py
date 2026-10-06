@@ -489,7 +489,16 @@ def run(
     get_qr_code(client, session)
 
     print(session.auth_url, flush=True)
-    print("Отсканируйте ссылку из stdout камерой в приложении ВКонтакте.", file=sys.stderr)
+    print("Отсканируйте QR-код приложением ВКонтакте; не открывайте ссылку в браузере.", file=sys.stderr)
+    try:
+        import qrcode
+    except ImportError:
+        print("Не удалось вывести QR-код. Установите пакет qrcode или используйте qrencode.", file=sys.stderr)
+    else:
+        qr = qrcode.QRCode()
+        qr.add_data(session.auth_url)
+        qr.make(fit=True)
+        qr.print_ascii(out=sys.stderr, tty=sys.stderr.isatty(), invert=True)
 
     super_app_token = wait_for_approval(client, session, poll_interval=poll_interval)
     complete_login(client, session, super_app_token)
