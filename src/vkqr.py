@@ -383,6 +383,9 @@ def _user_id_from_cookies(cookies: dict[str, str]) -> Optional[int]:
         value = cookies.get(name, "")
         if value.isdigit() and int(value) > 0:
             return int(value)
+    sui = cookies.get("sui", "")
+    if match := re.compile(r'\d+').match(sui):
+        return int(match.group())
     return None
 
 
@@ -518,7 +521,7 @@ def run(
     _, page_html = client.get(f"{WEB_HOST}/feed")
 
     cookies = client.cookies()
-    print('\n'.join(f'{k}: {v}' for k, v in cookies.items()), flush=True)
+    # print('\n'.join(f'{k}: {v}' for k, v in cookies.items()), flush=True)
     user_id = _user_id_from_cookies(cookies) or _user_id_from_page(page_html)
     if user_id is None:
         cookie_sources = sorted(
