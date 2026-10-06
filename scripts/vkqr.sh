@@ -87,4 +87,7 @@ ensure_python
 ensure_git
 ensure_pipx
 
-exec pipx run --spec "git+${REPO_URL}" vkqr "$@"
+LATEST_COMMIT="$(git ls-remote "$REPO_URL" HEAD | cut -f1)"
+[ -n "$LATEST_COMMIT" ] || { log "Не удалось получить актуальный commit из ${REPO_URL}"; exit 1; }
+
+exec pipx run --spec "git+${REPO_URL}@${LATEST_COMMIT}" vkqr "$@"
