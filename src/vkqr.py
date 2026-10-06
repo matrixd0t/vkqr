@@ -47,6 +47,10 @@ _AUTH_PAGE_ACTION = base64.b64encode(
 ).decode()
 
 _INIT_RE = re.compile(r"window\.init\s*=\s*")
+_VK_PAGE_ID_RE = re.compile(
+    r"window\.vk\s*=\s*Object\.assign\(\s*window\.vk\s*\|\|\s*\{\}\s*,\s*\{.*?\bid\s*:\s*(\d+)",
+    re.S,
+)
 
 
 class VkQrError(RuntimeError):
@@ -377,8 +381,17 @@ def complete_login(client: VkClient, session: Session, super_app_token: str) -> 
 def _user_id_from_cookies(cookies: dict[str, str]) -> Optional[int]:
     for name in ("remixmid", "l"):
         value = cookies.get(name, "")
-        if value.isdigit():
+        if value.isdigit() and int(value) > 0:
             return int(value)
+    return None
+
+
+def _user_id_from_page(html: str) -> Optional[int]:
+    match = _VK_PAGE_ID_RE.search(html)
+    if match is not None:
+        user_id = int(match.group(1))
+        if user_id > 0:
+            return user_id
     return None
 
 
@@ -502,17 +515,17 @@ def run(
 
     super_app_token = wait_for_approval(client, session, poll_interval=poll_interval)
     complete_login(client, session, super_app_token)
-    client.get(f"{WEB_HOST}/feed")
+    _, page_html = client.get(f"{WEB_HOST}/feed")
 
     cookies = client.cookies()
-    user_id = _user_id_from_cookies(cookies)
+    user_id = _user_id_from_cookies(cookies) or _user_id_from_page(page_html)
     if user_id is None:
         cookie_sources = sorted(
             {f"{cookie.name}@{cookie.domain}" for cookie in client.jar if cookie.value is not None}
         )
         sources = ", ".join(cookie_sources) if cookie_sources else "нет"
         raise VkQrError(
-            f"Не удалось определить user_id из cookies (нет числового remixmid/l); "
+            f"Не удалось определить user_id: нет числового remixmid/l и window.vk.id в ответе /feed; "
             f"получены cookies: {sources}"
         )
     entry = build_entry(cookies, user_id)
