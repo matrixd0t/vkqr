@@ -505,7 +505,17 @@ def run(
     client.get(f"{WEB_HOST}/feed")
 
     cookies = client.cookies()
-    entry = build_entry(cookies, _user_id_from_cookies(cookies))
+    user_id = _user_id_from_cookies(cookies)
+    if user_id is None:
+        cookie_sources = sorted(
+            {f"{cookie.name}@{cookie.domain}" for cookie in client.jar if cookie.value is not None}
+        )
+        sources = ", ".join(cookie_sources) if cookie_sources else "нет"
+        raise VkQrError(
+            f"Не удалось определить user_id из cookies (нет числового remixmid/l); "
+            f"получены cookies: {sources}"
+        )
+    entry = build_entry(cookies, user_id)
 
     target = output
     if target is None:
