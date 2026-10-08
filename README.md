@@ -50,8 +50,7 @@ vkqr -o cookies.json
 
 
 ```bash
-uvx install "git+https://github.com/matrixd0t/vkqr.git"
-vkqr -o cookies.json
+uvx --from "git+https://github.com/matrixd0t/vkqr.git" vkq -o cookies.json
 ```
 
 ```bash
