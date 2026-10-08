@@ -48,15 +48,10 @@ uv tool install "git+https://github.com/matrixd0t/vkqr.git"
 vkqr -o cookies.json
 ```
 
-
-```bash
-uvx --from "git+https://github.com/matrixd0t/vkqr.git" vkq -o cookies.json
-```
-
 ```bash
 uvx --from "git+https://github.com/matrixd0t/vkqr.git" vkqr -o cookies.json
 ```
-нет
+
 
 ## Пример использования
 
