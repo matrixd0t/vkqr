@@ -27,6 +27,7 @@ WEB_HOST = "https://vk.ru"
 APP_ID = 7913379
 V_GET_QR_AUTH_DATA = "5.276"
 V_AUTH_METHODS = "5.126"
+V_USERS_GET = "5.199"
 
 DEFAULT_POLL_INTERVAL = 2.0
 MAX_CODE_ATTEMPTS = 5
@@ -47,10 +48,6 @@ _AUTH_PAGE_ACTION = base64.b64encode(
 ).decode()
 
 _INIT_RE = re.compile(r"window\.init\s*=\s*")
-_VK_PAGE_ID_RE = re.compile(
-    r"window\.vk\s*=\s*Object\.assign\(\s*window\.vk\s*\|\|\s*\{\}\s*,\s*\{.*?\bid\s*:\s*(\d+)",
-    re.S,
-)
 
 
 class VkQrError(RuntimeError):
@@ -394,24 +391,26 @@ def complete_login(client: VkClient, session: Session, super_app_token: str) -> 
     return payload
 
 
-def _user_id_from_cookies(cookies: dict[str, str]) -> Optional[int]:
-    for name in ("remixmid", "l"):
-        value = cookies.get(name, "")
-        if value.isdigit() and int(value) > 0:
-            return int(value)
-    sui = cookies.get("sui", "")
-    if match := re.compile(r'\d+').match(sui):
-        return int(match.group())
-    return None
-
-
-def _user_id_from_page(html: str) -> Optional[int]:
-    match = _VK_PAGE_ID_RE.search(html)
-    if match is not None:
-        user_id = int(match.group(1))
-        if user_id > 0:
-            return user_id
-    return None
+def get_user_id(client: VkClient, access_token: str) -> int:
+    """Gets the authenticated user's ID from the VK API."""
+    if not access_token:
+        raise VkQrError("connect_code_auth не вернул access_token для users.get")
+    status, text = client.post(
+        f"{API_HOST}/method/users.get",
+        params={"v": V_USERS_GET},
+        data={"access_token": access_token},
+        headers=_api_headers(),
+    )
+    users = _parse_api(status, text, "users.get")
+    if not isinstance(users, list) or not users or not isinstance(users[0], dict):
+        raise VkQrError("users.get не вернул данные пользователя", raw=users)
+    try:
+        user_id = int(users[0]["id"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise VkQrError("users.get не вернул корректный user_id", raw=users[0]) from exc
+    if user_id <= 0:
+        raise VkQrError("users.get вернул некорректный user_id", raw=users[0])
+    return user_id
 
 
 def _read_line(prompt: str) -> str:
@@ -462,17 +461,18 @@ def wait_for_approval(client: VkClient, session: Session, poll_interval: float =
         time.sleep(poll_interval)
 
 
-def build_entry(cookies: dict[str, str], user_id: Optional[int], now: Optional[float] = None) -> dict[str, Any]:
+def build_entry(cookies: dict[str, str], user_id: int, now: Optional[float] = None) -> dict[str, Any]:
     missing = [name for name in ("p", "remixsid") if not cookies.get(name)]
     if missing:
         raise VkQrError(f"В cookies отсутствуют обязательные значения: {', '.join(missing)}")
+    if not isinstance(user_id, int) or user_id <= 0:
+        raise VkQrError("Для сохранения cookies требуется корректный user_id")
     entry = {
         "created_at": int(now if now is not None else time.time()),
         "p": cookies["p"],
         "remixsid": cookies["remixsid"],
+        "user_id": user_id,
     }
-    if user_id is not None:
-        entry["user_id"] = int(user_id)
     return entry
 
 
@@ -533,12 +533,14 @@ def run(
         qr.print_ascii(out=sys.stderr, tty=sys.stderr.isatty(), invert=True)
 
     super_app_token = wait_for_approval(client, session, poll_interval=poll_interval)
-    complete_login(client, session, super_app_token)
-    _, page_html = client.get(f"{WEB_HOST}/feed")
+    login_result = complete_login(client, session, super_app_token)
+    login_data = login_result.get("data")
+    access_token = login_data.get("access_token") if isinstance(login_data, dict) else None
+    user_id = get_user_id(client, str(access_token or ""))
+    client.get(f"{WEB_HOST}/feed")
 
     cookies = client.cookies()
     # print('\n'.join(f'{k}: {v}' for k, v in cookies.items()), flush=True)
-    user_id = _user_id_from_cookies(cookies) or _user_id_from_page(page_html)
     entry = build_entry(cookies, user_id)
 
     target = output
@@ -548,8 +550,7 @@ def run(
             raise VkQrError("Путь к файлу не задан, cookies не сохранены")
 
     saved = append_entry(target, entry)
-    user_info = f"user_id={user_id}, " if user_id is not None else ""
-    print(f"OK: {user_info}cookies сохранены в {saved.resolve()}", file=sys.stderr)
+    print(f"OK: user_id={user_id}, cookies сохранены в {saved.resolve()}", file=sys.stderr)
     return entry
 
 
