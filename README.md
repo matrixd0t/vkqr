@@ -44,9 +44,20 @@ pipx run --spec "git+https://github.com/matrixd0t/vkqr.git" vkqr -o cookies.json
 ### Установить как команду
 
 ```bash
-pipx install "git+https://github.com/matrixd0t/vkqr.git"
+uv tool install "git+https://github.com/matrixd0t/vkqr.git"
 vkqr -o cookies.json
 ```
+
+
+```bash
+uvx install "git+https://github.com/matrixd0t/vkqr.git"
+vkqr -o cookies.json
+```
+
+```bash
+uvx --from "git+https://github.com/matrixd0t/vkqr.git" vkqr -o cookies.json
+```
+нет
 
 ## Пример использования
 
