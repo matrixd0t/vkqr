@@ -332,7 +332,7 @@ def validate_auth_code(client: VkClient, session: Session, code: str) -> None:
 
 
 def complete_login(client: VkClient, session: Session, super_app_token: str) -> dict[str, Any]:
-    """connect_code_auth + переход по next_step_url, который выставляет cookies vk.ru."""
+    """Completes connect_code_auth, following next_step_url when VK returns one."""
     data = {
         "token": super_app_token,
         "uuid": session.uuid,
@@ -371,9 +371,25 @@ def complete_login(client: VkClient, session: Session, super_app_token: str) -> 
             raw=payload,
         )
     connect_data = payload.get("data") or {}
+    if not isinstance(connect_data, dict):
+        connect_data = {}
     next_step_url = connect_data.get("next_step_url")
     if not next_step_url:
-        raise VkQrError("connect_code_auth не вернул next_step_url", raw=payload)
+        if payload.get("type") == "okay":
+            return payload
+        response_type = payload.get("type")
+        data = payload.get("data")
+        details = [f"поля ответа: {', '.join(sorted(map(str, payload)))}"]
+        if response_type is not None:
+            details.append(f"type={str(response_type)[:40]}")
+        if isinstance(data, dict):
+            details.append(f"поля data: {', '.join(sorted(map(str, data)))}")
+        else:
+            details.append(f"data имеет тип {type(data).__name__}")
+        raise VkQrError(
+            f"connect_code_auth не вернул next_step_url ({'; '.join(details)})",
+            raw=payload,
+        )
     client.get(_absolute_url(str(next_step_url)))
     return payload
 
@@ -450,14 +466,14 @@ def build_entry(cookies: dict[str, str], user_id: Optional[int], now: Optional[f
     missing = [name for name in ("p", "remixsid") if not cookies.get(name)]
     if missing:
         raise VkQrError(f"В cookies отсутствуют обязательные значения: {', '.join(missing)}")
-    if user_id is None:
-        raise VkQrError("Не удалось определить user_id из cookies (нет remixmid/l)")
-    return {
-        "user_id": int(user_id),
+    entry = {
         "created_at": int(now if now is not None else time.time()),
         "p": cookies["p"],
         "remixsid": cookies["remixsid"],
     }
+    if user_id is not None:
+        entry["user_id"] = int(user_id)
+    return entry
 
 
 def load_store(path: Any) -> dict[str, Any]:
@@ -523,15 +539,6 @@ def run(
     cookies = client.cookies()
     # print('\n'.join(f'{k}: {v}' for k, v in cookies.items()), flush=True)
     user_id = _user_id_from_cookies(cookies) or _user_id_from_page(page_html)
-    if user_id is None:
-        cookie_sources = sorted(
-            {f"{cookie.name}@{cookie.domain}" for cookie in client.jar if cookie.value is not None}
-        )
-        sources = ", ".join(cookie_sources) if cookie_sources else "нет"
-        raise VkQrError(
-            f"Не удалось определить user_id: нет числового remixmid/l и window.vk.id в ответе /feed; "
-            f"получены cookies: {sources}"
-        )
     entry = build_entry(cookies, user_id)
 
     target = output
@@ -541,7 +548,8 @@ def run(
             raise VkQrError("Путь к файлу не задан, cookies не сохранены")
 
     saved = append_entry(target, entry)
-    print(f"OK: user_id={entry['user_id']}, cookies сохранены в {saved.resolve()}", file=sys.stderr)
+    user_info = f"user_id={user_id}, " if user_id is not None else ""
+    print(f"OK: {user_info}cookies сохранены в {saved.resolve()}", file=sys.stderr)
     return entry
 
 
